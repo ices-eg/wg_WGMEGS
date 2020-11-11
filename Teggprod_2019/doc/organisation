@@ -1,0 +1,18 @@
+
+File organisation 
+
+|- README # general info about the project
+
+|- analysis.R # master script that executes everything
+
+|- data-raw/ # original raw data
+
+|- data/ # clean data (produced w/ script)
+
+|- R/ # functions definitions
+
+|- doc/ # manuscript files
+
+|- figs/ # final figures
+
+|- output/ # other code output

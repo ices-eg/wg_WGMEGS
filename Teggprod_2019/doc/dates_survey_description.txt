@@ -1,0 +1,5 @@
+Year		Calendar year that sample was collected on (numerical yyyy)
+period		Survey period that sample was collected in. Period 0 means complete spawning season (numerical 0,1,2,...)
+Component	Relates to stock spawning component that sample was collected in either W/S or NS (W, S)
+dates		Start date of each period (dd/mm/yyyy)
+datee		End date of each period (dd/mm/yyyy)

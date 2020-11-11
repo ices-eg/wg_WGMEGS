@@ -1,0 +1,63 @@
+Column Description:	
+Unique ID		Unique identifier for each sample/record collected.
+Period			Survey period that sample was collected in.(numerical 1,2,...)
+Component		Relates to stock spawning component that sample was collected in either W/S or N/S (W, S)
+Country			Code of country that collected the sample- see countries worksheet
+Vessel			Vessel used - see Vessels worksheet
+Gear			Sampler used - See Gears worksheet
+Haul			Haul or sample number
+Aperture		Aperture of sampler in mm
+Ap area			Area of aperture in m2
+Effic			Sampler efficiency (0 - 1)
+Day			Calendar day that sample was collected on (dd)
+Month			Calendar month that sample was collected on (mm)
+Year			Calendar year that sample was collected on (yyyy)
+Hour			Hour component of the time that sample was collected - using 24HR clock
+Minutes			Minute component of the time that sample was collected - using 24HR clock
+LatDeg			Sample Location - Degrees latitude
+LatMins			Sample Location - minutes latitude
+LongDeg			Sample Location - Degrees longitude
+LongMins		Sample Location - minutes longitude
+E/W			East or West
+declon			Sample location - decimal degrees longitude
+declat			Sample location - decimal degrees latitude
+HALFST			Half ICES rectangle - standard sampling unit
+FlowRevs		Main Flowmeter count(revs)
+FlowCal			Main Flowmeter calibration (revs/m)
+FlowRevsB		Secondary Flowmeter count(revs) - only used for twin samplers when both nets are analyzed
+FlowCalB		Secondary Flowmeter calibration(revs/m) - only used for twin samplers when both nets are analyzed
+Sdepth			Sampler depth (m)
+Bdepth			Bottom depth (m)
+VolFilt			Volume filtered(m2)
+TempSur(5m)		Temperature at 5m
+Temp20m			Temperature at 20m
+Temp50m			Temperature at 50m
+Temp100m		Temperature at 100m
+TempB			Temperature at Bottom
+Sal5m			Salinity at 5m
+Sal20m			Salinity at 20m
+SalB			Salinity at bottom
+Mac1			Mackerel stage 1 egg numbers - raw numbers
+Mac2			Mackerel stage 2 egg numbers - raw numbers
+Mac3			Mackerel stage 3 egg numbers - raw numbers
+Mac4			Mackerel stage 4 egg numbers - raw numbers
+Mac5			Mackerel stage 5 egg numbers - raw numbers
+MacFactor		Mackerel raising factor applied to raw numbers
+Raised_MacStage1	Mackerel stage 1 egg numbers - raised numbers
+Raised_MacStage2	Mackerel stage 2 egg numbers - raised numbers
+Raised_MacStage3	Mackerel stage 3 egg numbers - raised numbers
+Raised_MacStage4	Mackerel stage 4 egg numbers - raised numbers
+Raised_MacStage5	Mackerel stage 5 egg numbers - raised numbers
+Hom1			Horse mackerel stage 1 egg numbers - raw numbers
+Hom2			Horse mackerel stage 2 egg numbers - raw numbers
+Hom3			Horse mackerel stage 3 egg numbers - raw numbers
+Hom4			Horse mackerel stage 4 egg numbers - raw numbers
+HomFactor		Horse mackerel raising factor applied to raw numbers
+Raised_HomStage1	Horse mackerel stage 1 egg numbers - raised numbers
+Raised_HomStage2	Horse mackerel stage 2 egg numbers - raised numbers
+Raised_HomStage3	Horse mackerel stage 3 egg numbers - raised numbers
+Raised_HomStage4	Horse mackerel stage 4 egg numbers - raised numbers
+Others			Other eggs count - raw numbers
+OthFactor		Other eggs raising factor applied to raw numbers
+RaisedOthers		Other eggs count - raised numbers
+NoteLineRef_no		Reference to worksheet 'MEGS data '
