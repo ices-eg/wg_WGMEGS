@@ -1,0 +1,767 @@
+---
+title: "Western Atlantic mackerel adults parameters for DEPM"
+author: "mkorta modified from DEPM_mackerel_script of PSanpedro"
+date: "4/7/2023"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    theme: flatly
+    #code_folding: hide
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE, fig.width=12, fig.height=8)
+
+knitr::opts_chunk$set(
+ fig.width = 6,
+ fig.asp = 0.8,
+ out.width = "80%"
+)
+
+```
+*Lola Garabana. Presentation WGMEGS meeting,April 17-21 Madrid.*
+
+```{r echo=F, message=FALSE, warning=FALSE}
+# Load libraries 
+#library(ggmap)
+library(ggplot2)
+library(MASS) # masks "select" in dplyr
+library(janitor)
+library(dplyr)
+library(tidyverse)
+library(kableExtra)
+library(SDMTools)
+library(broom)
+library(sf)
+library(rworldmap)
+library(rworldxtra)
+```
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# ---------------- Data loading and checks ------------------- #
+
+# dat
+adults.dat <- read.csv("dat/Datos DEPM 2022.csv")
+
+# map
+world <- getMap(resolution = "high")
+world <- st_as_sf(world)
+```
+
+```{r echo=F, message=FALSE, warning=FALSE}
+# Exploratory of data
+# dim(adults.dat)
+# head(adults.dat)  
+# str(adults.dat)
+
+# Identify duplicate records
+#anyDuplicated(adults.dat)
+
+# Remove duplicate 
+# if(data.dup != 0) {
+#   adults.dat <- adults.dat[!duplicated(adults.dat), ]
+#   }
+  
+# check records without ...  
+# adults.dat[is.na(adults.dat$Haul),]  
+# adults.dat[is.na(adults.dat$Sampling),]  
+# adults.dat[is.na(adults.dat$Period),]  
+
+# Validate format for some variables 
+adults.dat$Haul <- as.factor(as.character(adults.dat$Haul))
+adults.dat$Sampling <- as.factor(as.character(adults.dat$Sampling))
+adults.dat$Period <- as.factor(as.character(adults.dat$Period))
+
+
+
+# Change "" levels for some factor variables by NA:
+#levels(adults.dat$Oocyte)[1] <- NA
+#levels(adults.dat$Age)[1] <- NA
+```
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# ---------------- Define values  ------------------- #
+
+# Minimum maturity stage to be adult (for males and females)
+stage.mat <- 2 
+
+# Minimum samples 
+min.totnumb <- 20 # minimum sampling number by haul to do calculations  
+
+# Subsample weight
+Wcent <- 0.1
+
+```
+
+# Raw Data Summary {.tabset .tabset-tabs}
+
+## Tables
+
+**By period**
+
+
+```{r echo=F, message=FALSE, warning=FALSE}
+nHaul <- adults.dat %>% group_by(Period) %>%  summarise(nHaul= length(unique(Haul)))
+
+nfish <- adults.dat %>% group_by (Period, Sampling) %>%
+         summarise(nFish=n())%>%
+         pivot_wider(names_from = Sampling, values_from = nFish)%>%
+         replace(is.na(.), 0)%>%
+         rename("R_nFish" = "R", "D_nFish" = "D")%>%
+         mutate(nFish = sum(c_across(where(is.numeric))))
+
+# Females in Mat>=stage.mat 
+nMatFem <- adults.dat %>% group_by (Period) %>%
+         filter (Sex==2 & Mat>=stage.mat) %>%  
+         summarise(nMatFem= n())
+
+# Females in Mat=4
+nSpawFem <- adults.dat %>% group_by (Period) %>%
+         filter (Sex==2 & Mat==4) %>%  
+         summarise(nSpawFem= n())
+  
+
+# Females Collected
+nMatFem_C <- adults.dat %>% group_by (Period) %>%
+            filter (Cod != "") %>%  
+            summarise(nMatFem_C= n())
+
+# Females Screened
+nMatFem_H <- adults.dat %>% group_by (Period) %>%
+            filter (!is.na(Oocyte_H)) %>%  
+            summarise(nMatFem_H= n())
+
+# Females with POFage
+nPofFem <-adults.dat %>%  group_by (Period) %>%
+filter (POFage != "NA") %>%  
+  summarise(nPOFAge= n())
+
+# Females batch fecundity
+nNcent <- adults.dat %>%group_by (Period) %>%
+  filter (Ncent != "NA") %>%  
+  summarise(nNcent= n())
+
+# Create a summary table 
+left_join(nHaul, nfish, by="Period") %>%
+   left_join(., nMatFem, by="Period") %>%
+      left_join(., nSpawFem, by="Period")%>%
+        left_join(., nMatFem_C, by="Period")%>%
+          left_join(., nMatFem_H, by="Period")%>%
+            left_join(., nPofFem, by="Period")%>%
+              left_join(., nNcent, by="Period")%>%
+                relocate (nFish, .before = D_nFish)%>%
+                relocate (R_nFish, .before = D_nFish)%>%
+                adorn_totals("row")%>%
+                replace(is.na(.), 0)%>%
+  kbl(caption = "Sampled by period.") %>%
+            kable_classic(#full_width = F, 
+              html_font = "Cambria")%>%
+            column_spec(8:11, background = "lightgrey")
+```
+
+```{r echo=T}
+# ---- Legend ------ #
+
+# nHaul:	 No. of hauls.
+# nFish:	 No. of individual fish measured.
+# R_nFish:	 No. of individual fish randomly sampled and measured.
+# D_nFish:   No. of individual fish sampled by direct sampling and measured.
+# nMatFem:   No. of mature females. 
+# nSpawFem:  No. of mature females in maturity stage 4 (Hydrated).
+# nMatFem_C: No. of ovaries from mature females that were collected.
+# nMatFem_H: No. of ovaries from collected mature females that were histologically screened.
+# nPOFAge:   No. of ovaries assigned as "with presence of POF" in histological screening.
+# nNcent:    No. of ovaries analysed for batch fecundity.
+
+# ------------------ #
+
+```
+
+
+**By haul**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+# Number of fish
+nFish <- adults.dat %>% group_by (Haul) %>% summarise(nFish=n())
+
+# Number of Females
+nFemales <- adults.dat %>% group_by (Haul) %>% 
+  filter (Sex==2) %>% summarise(nFemales=n())
+
+# Females in Mat>=stage.mat 
+nMatFem <- adults.dat %>%  group_by (Haul) %>%
+  filter (Sex==2 & Mat>=stage.mat) %>%  
+  summarise(nMatFem= n())
+
+# Spawning Females: Females in Mat=4
+nSpawFem <- adults.dat %>% group_by (Haul) %>%
+  filter (Sex==2 & Mat==4) %>%  
+  summarise(nSpawFem= n())
+
+# Females Collected
+nMatFem_C <- adults.dat %>% group_by (Haul) %>%
+            filter (Cod != "") %>%  
+            summarise(nMatFem_C= n())
+
+# Females Screened
+nMatFem_H <- adults.dat %>% group_by (Haul) %>%
+            filter (!is.na(Oocyte_H)) %>%  
+            summarise(nMatFem_H= n())
+
+# Females with POFage
+nPOFageFem <- adults.dat %>%  
+  group_by (Haul) %>%
+  filter (POFage != "NA") %>%  
+  summarise(nPOFAge= n())
+
+# Females batch fecundity
+nNcent <- adults.dat%>%  group_by (Haul) %>%
+  filter (Ncent != "NA") %>%  
+  summarise(nNcent= n())
+
+# add Haul information
+dataHaul <- unique(data.frame(adults.dat$Period, adults.dat$Haul,
+                              adults.dat$Long,adults.dat$Lat,adults.dat$Country))
+
+
+names(dataHaul) <- c("Period", "Haul", "Long", "Lat", "country")
+
+# Create a summary table 
+left_join(dataHaul,nFish, by="Haul") %>%
+left_join(.,nFemales, by="Haul") %>%
+   left_join(., nMatFem, by="Haul") %>%
+      left_join(., nSpawFem, by="Haul")%>%
+          left_join(., nMatFem_C, by="Haul")%>%
+            left_join(., nMatFem_H, by="Haul")%>%
+              left_join(., nPOFageFem, by="Haul")%>%
+                left_join(., nNcent, by="Haul")%>%
+  adorn_totals("row")%>%
+  replace(is.na(.), 0)%>%
+  arrange(Period)%>%
+  kbl(caption = "Samples by Haul.") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")%>%
+            column_spec(10:13, background = "lightgrey")
+        #row_spec(c(4:9,11:13, 19:21, 24:26, 29, 34), background = "lightgrey")
+```
+
+
+## Plots
+
+**Geographical distribution of nFish**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(data = world, frame = year) +
+  geom_sf(color = "black", fill = "lightgrey") +
+  coord_sf(xlim = c(-20,12), ylim = c(35,64), expand = T, crs="+proj=longlat   +ellps=WGS84 +datum=WGS84") +
+  geom_point(data = adults.dat%>%dplyr::select(Lat, Long, Period)%>%
+                group_by(Lat)%>%
+                dplyr::mutate(number=n())%>%distinct(), 
+                aes(x=Long , y=Lat, size=sqrt(number)*100, fill=Period),
+                #aes(x=StartLongitude , y= StartLatitude, size=sqrt(number)*100), fill="darkblue",
+                shape = 21, alpha=.5)+
+  #scale_size_area(limits=c(0,1000), labels = c("1", "5", "10", "25"),breaks = c( 100,500, 700,1000))+
+  theme_bw()+
+  labs(size="sample size", title="Nfish samples")+
+  theme( legend.position = "right",
+         legend.text = element_text(size = 12, colour = "black"),
+         legend.title = element_text(face = "bold")
+         #legend.box.background = element_rect(color="black", size=1)
+         )
+
+```
+
+
+**Length and weight**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+#by period, length
+ggplot(adults.dat, aes(x=Length, group=Period)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="black")+
+  geom_density(lwd=1)+
+  facet_wrap(~Period)+
+  xlab("Fish Length (cm)")
+
+#by period, weight
+ggplot(adults.dat, aes(x=Wt, group=Period)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  facet_wrap(~Period)+
+  xlab("Fish weight (g)")
+
+#by period, ovaryweight
+ggplot(adults.dat, aes(x=Wov, group=Period)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="white")+
+  geom_density(lwd=1)+
+  facet_wrap(~Period)+
+  xlab("Ovary weigth (g)")
+```
+
+# Paremeters by haul and Period {.tabset .tabset-tabs}
+
+```{r echo=T}
+# Wh:	Mean weight of mature females
+# Rh:	Sex-ratio 
+# Fh:	Batch fecundity (the mean female expected batch fecundity)
+# Sh:	Spawning fraction ratio 
+```
+
+## Total Weight correction {.tabset .tabset-tabs}
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# Correct bias produced by hydrated females in expected weight
+
+# Empirical weight-length plot for all females
+plot(adults.dat$Length[adults.dat$Sex==2],adults.dat$Wt[adults.dat$Sex==2],
+     xlab="Length (cm)", ylab="Total weight (g)", 
+     main="Females: Empirical Total Weight-Length relationship", col="red")
+
+# remove outlier <- no lo hago
+# adults.dat[adults.dat$Wt > 200 & adults.dat$Length,]$Wt <- NA
+#Plot wit outlier corrected
+#plot(adults.dat$Length[adults.dat$Sex==2],adults.dat$Wt[adults.dat$Sex==2],xlab="Length (mm)", #ylab="Total weight (g)", main="Females: Empirical Total Weight-Length", col="red")
+
+# Correction:
+# Select females, adult (Mat >= 2) and non-hydrated (Mat!=4)
+adults.dat$Wnov<- adults.dat$Wt-adults.dat$Wov
+adults.dat$Wnov[is.na(adults.dat$Wov)] <- NA
+which.weight <-  subset (adults.dat, Sex==2 & Mat>=stage.mat & Mat!=4)
+
+# Fit linear regression to Wt female and Wnov
+correctW.lm <- lm(Wt ~ Wnov, data=which.weight)
+
+# Examining the fit 
+sum_lm <-summary(correctW.lm)
+#coef(correctW.lm)[c(1,2)]
+
+ggplot(which.weight, aes(Wnov, Wt))+
+  geom_point()+
+  stat_smooth(method = "lm",
+              formula = y ~ x,
+              geom = "smooth")
+```
+
+```{r echo=T}
+# (Intercept)        Wnov 
+#  7.795266         1.033756 
+#  Adjusted R-squared:  0.99 
+```
+
+```{r echo=F, message=FALSE, warning=FALSE}
+# Residual Analysis
+#plot_res <- plot(correctW.lm)
+
+# Identify outliers
+res.dat <- data.frame(correctW.lm$residuals, correctW.lm$fitted.values)
+out.lm <- rownames(res.dat[res.dat[,1] > 33.5,])
+out.lm <- adults.dat[rownames(adults.dat) %in% out.lm,] 
+
+# Plot: relationship between gonad-free female weight and
+# total  weight. Red shaded area = 95% CI
+# jpeg (file ="CorrectWeightFemales.jpeg", width = 15, height = 15, units = "cm", res=300)
+# par(mfrow=c(1,1))
+
+new <- data.frame (Wnov = seq(min(which.weight$Wnov, na.rm=T), 
+                              max(which.weight$Wnov, na.rm=T), len=1000)) 
+
+pred <- predict(correctW.lm, new, type="response", interval="predict")
+
+fit.dat <- cbind(new, pred)
+
+ggplot(fit.dat, aes(Wnov, fit))+
+  geom_smooth(method = "lm", se = FALSE)+
+  geom_ribbon(aes(ymin = lwr, ymax = upr, color = "red", fill = "red"), alpha = .15)+
+  labs(x = "Ovary-free weight (g)", y = "Total weight (g) (Exp)", title = "Correction for hydration.")+
+  guides(colour = F, fill = F)+
+  geom_point (data =which.weight, aes(Wnov, Wt), col = "navy", pch = 21)
+
+# Prediction (Wexp)!!
+# Add values to variable Wexp: expected Weight for Females (Sex==2), Mature (Mat>=stage.mat) 
+# from random sampling (Sampling=="A")
+
+adults.dat$Wexp <- ifelse(adults.dat$Sampling=="R" & 
+                          adults.dat$Sex==2 & adults.dat$Mat>=stage.mat, 
+                          predict(correctW.lm, adults.dat, type="response"), NA)
+
+```
+
+
+## Female mean weight (Wh)
+
+```{r echo=F, message=FALSE, warning=FALSE}
+# females,mature and sampling:random, records with Wexp data:
+weight.by.haul <- tapply(adults.dat$Wexp, adults.dat$Haul, mean, na.rm=T)
+Wh <- data.frame(Haul=rownames(weight.by.haul), Wh=round(weight.by.haul,3)) 
+rownames(Wh) <- NULL
+Wh$Wh[is.nan(Wh$Wh)] <- NA
+
+# Number of mature females from random sampling with Wexp data:
+females.by.haul <- tapply(adults.dat$Wexp[adults.dat$Sampling=="R"& adults.dat$Sex==2 & adults.dat$Mat>=stage.mat], adults.dat$Haul[adults.dat$Sampling=="R"& adults.dat$Sex==2 & adults.dat$Mat>=stage.mat], length)
+females.by.haul[is.na(females.by.haul)] <- 0
+nF <- data.frame(Haul=rownames(females.by.haul), n.Females.R=females.by.haul)
+rownames(nF) <- NULL
+
+# Wh results
+# All.data
+n <- data.frame(adults.dat %>%group_by(Period,Haul)%>%dplyr::summarise(n()))
+names(n) <- c("Period","Haul", "N")
+nMales <- data.frame(adults.dat %>% filter(Sex==1 & Mat>=stage.mat) %>%group_by(Period,Haul)%>%dplyr::summarise(n()))
+names(nMales) <- c("Period","Haul", "nMales")
+nFemales <- data.frame(adults.dat %>% 
+                         filter(Sex==2 & Mat>=stage.mat) %>%group_by(Period,Haul)%>%dplyr::summarise(n()))
+names(nFemales) <- c("Period", "Haul", "nFemales")
+NbyHaul <- merge( merge(merge (n, nMales,all=T), nFemales,all=T), nF, all=T)
+NbyHaul[is.na(NbyHaul)] <- 0
+
+# minimum number of females to estimate mean weight by haul
+Wh <- merge(NbyHaul, Wh, by="Haul")
+Wh$Wh <- ifelse (Wh$n.Females.R < min.totnumb, NA, Wh$Wh)
+
+Wh%>%relocate(Period, .before = Haul) %>%
+  arrange(Period)%>%
+    kbl(caption = "Parameters: Wh by haul (auxiliar).") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")
+```
+
+
+## Sex ratio (Rh)
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# Mean weight of adult males from random sampling with Wt data
+malew.by.haul <- tapply(adults.dat$Wt[adults.dat$Sampling=="R"& adults.dat$Sex==1 & adults.dat$Mat>=stage.mat],adults.dat$Haul[adults.dat$Sampling=="R"& adults.dat$Sex==1 & adults.dat$Mat>=stage.mat], mean, na.rm=T)
+malew.by.haul[is.na(malew.by.haul)] <- 0 # remove NA, it is neccesary to sum weight.females+weight.males
+malew.by.haul <- as.data.frame(malew.by.haul)
+
+# Number of adult males from random sampling with Wt data
+malen.by.haul <- tapply(adults.dat$Wt[adults.dat$Sampling=="R"& adults.dat$Sex==1 & adults.dat$Mat>=stage.mat],adults.dat$Haul[adults.dat$Sampling=="R"& adults.dat$Sex==1 & adults.dat$Mat>=stage.mat], length)
+malen.by.haul[is.na(malen.by.haul)] <- 0 # remove NA
+malen.by.haul <- as.data.frame(malen.by.haul)
+
+totnumb.by.haul <- data.frame(females.by.haul + malen.by.haul)
+names(totnumb.by.haul) <- "TotNh"
+totweight.by.haul <- data.frame(weight.by.haul + malew.by.haul)
+names(totweight.by.haul) <- "TotWh"
+ratio.by.haul <- data.frame(weight.by.haul/ totweight.by.haul)
+names(ratio.by.haul) <- "Rh"
+
+Rh <- data.frame(rownames(totnumb.by.haul), totnumb.by.haul, round(ratio.by.haul,3))
+names(Rh) <- c("Haul", "TotNh", "Rh")
+rownames(Rh) <- NULL
+
+# Hauls with numbers < min.totnumb, remove values of ratio 
+data.H <- merge (Wh, Rh, by="Haul", all=TRUE)
+data.H$Rh <- ifelse (data.H$TotNh < min.totnumb, NA, data.H$Rh)
+
+data.H%>%relocate(Period, .before = Haul) %>%
+  arrange(Period)%>%
+  kbl(caption = "Parameters: Rh by haul (auxiliar).") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")
+```
+
+
+## Batch fecundity (Fh) 
+
+**Geographical distribution_nCent**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(data = world, frame = year) +
+  geom_sf(color = "black", fill = "lightgrey") +
+  coord_sf(xlim = c(-20,12), ylim = c(35,64), expand = T, crs="+proj=longlat   +ellps=WGS84 +datum=WGS84") +
+  geom_point(data = adults.dat%>%
+                group_by(Lat)%>%
+                dplyr::mutate(number=n()), 
+                aes(x=Long , y= Lat, 
+                    size=number, fill= Period),
+                #aes(x=StartLongitude , y= StartLatitude, size=sqrt(number)*100), fill="darkblue",
+                shape = 21, alpha=.9)+
+  scale_size_area(limits=c(0,500), labels = c("1", "5", "10", "25"),breaks = c( 100,224, 320,500))+
+  theme_bw()+
+  labs(size="sample size", title="Nfish samples")+
+  theme( legend.position = "right",
+         legend.text = element_text(size = 12, colour = "black"),
+         legend.title = element_text(face = "bold")
+         #legend.box.background = element_rect(color="black", size=1)
+         )
+
+```
+
+
+
+**Fit regression**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# Fit a lm, glm, gaussian, removing records with Fobs values > 41940
+adults.dat <- adults.dat%>%mutate(batch.ov = ifelse(!is.na(Ncent), round((Wov*Ncent)/Wcent, 0),NA))
+
+aux <- ggplot(adults.dat, aes(x = 1, y = batch.ov))+
+          geom_point(colour = "red", size = 8, shape = 21)+
+          theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+
+# the individual observed batch fecundities (Fobs) are first
+# modelled against the corresponding female gonad-free weights
+# linear. it is assumed that the relationship is linear.
+
+batch.lm<- lm(batch.ov ~ Wnov, data=adults.dat, na.action="na.omit")
+sum.lm.batch <- summary(batch.lm)
+# coef(batch.lm)[c(1,2)]
+# y = batch.lm$coefficients[1] + batch.lm$coefficients[2]*x
+# R^2 = sqrt(0.1769)
+
+batch.glm.nb <- glm.nb(batch.ov~ Wnov, data=adults.dat,na.action="na.omit")
+summary(batch.glm.nb)
+
+finalbatch.glm <- batch.glm.nb
+
+# Plot of fitted model
+# data used for the fit
+fec.fit.data <- na.omit(adults.dat[, c("Wnov","batch.ov")])
+jpeg (file ="PlotFittedModelFecundity.jpeg", width = 15, height = 15, units = "cm", res=300)
+par(mfrow=c(1,1))
+plot(batch.ov ~ Wnov, data=fec.fit.data, pch=20,xlab="Ovary-free weight (g) ", ylab= "Fecundity (oocytes per batch)", main="Batch Fecundity",xlim=c(150, 500), ylim=c(0,41000))
+# Fitted function 
+NB.func <- function(x) exp(coef(finalbatch.glm)[1]+ coef(finalbatch.glm)[2]*x)
+curve(NB.func, add=T, lty=1, col=2)
+legend('topleft', c('negative binomial'), col=c(2), lty=c(1), bty='n', cex=.9)
+dev.off()
+
+
+```
+
+```{r echo=F, message=FALSE, warning=FALSE}
+# This model is subsequently applied to all
+# mature females in the sample to obtain the expected individual batch fecundity (Fexp), i.e. the
+# batch fecundity that these sampled females (with a given body weight) would have if they were
+# hydrated at the time of capture.
+
+
+# Fitted model on all mature females
+# fit <- function(x) batch.lm$coefficients[1] + batch.lm$coefficients[2]*x
+
+
+# Estimate expected Fecundity (Fexp)
+# New empty variable, Fexp
+adults.dat$Fexp <- NA
+
+# Predict values of Fexp.lab for model choosed:
+adults.dat$Fexp[adults.dat$Sampling=="R" & adults.dat$Mat >= stage.mat & !is.na(adults.dat$Sampling=="R" & adults.dat$Mat >= stage.mat)] <- predict(finalbatch.glm, adults.dat[adults.dat$Sampling=="R" & adults.dat$Mat >= stage.mat & !is.na(adults.dat$Sampling=="R" & adults.dat$Mat >= stage.mat),],type="response")
+
+# Batch Fecundity by haul 
+batch.by.haul <- tapply(adults.dat$Fexp, adults.dat$Haul, mean, na.rm=T)
+
+Fh <- data.frame(rownames(batch.by.haul), round(batch.by.haul,3))
+rownames(Fh) <- NULL
+names(Fh) <- c("Haul", "Fh")
+Datah2 <- merge(data.H, Fh, by="Haul",all=TRUE)
+Datah2$Fh <- ifelse (Datah2$TotNh  < min.totnumb, NA, Datah2$Fh)
+Datah2
+
+```
+
+## Spawning fraction (Sh)
+
+```{r echo=F, message=FALSE, warning=FALSE}
+# Only for Sampling="A" and Mat > mat.stage 
+# numeric variable 
+adults.dat$POFage <- as.numeric(as.character(adults.dat$POFage))
+
+table(adults.dat$POFage)
+
+# -9   0   1   2   3 
+# 161 354 187 107 124 
+
+# IMPORTANT: Selected data: mature, aleatory sampling and with POFs value (-9 (no POFs),0,1,2,3)
+mature   <- adults.dat$Mat >= stage.mat
+aleatory <- adults.dat$Sampling=="R" 
+POFs <- !is.na(adults.dat$POFage) 
+which.sfract <- mature & aleatory & POFs
+
+# Function to estimate Spawning fraction
+# Only non-hydrated records (SISP5 recommendation)
+# noPOFs (-9 values) are also used in the formula
+sfraction.fun <- function(i,data){
+  data <- data[data$Haul==i,]
+  data <- data[data$Mat!= 4,] # hydrated are not used to estimate Sh
+  if(is.na(sum(data$POFage, na.rm=T)))
+    sfract <- NA
+  else{
+    day1day2 <- sum(!is.na(data$POFage[data$POFage==1 | data$POFage==2]))
+    day3plus <- sum(!is.na(data$POFage[data$POFage>2]))
+    day3plus <- day3plus + sum(!is.na(data$POFage[data$POFage == -9]))
+    sfract <- (day1day2/2)/((day1day2/2)+day1day2+day3plus)
+  }
+  sfract
+}
+
+sfract.by.haul <- sapply(unique(adults.dat$Haul[which.sfract]), 
+                         sfraction.fun, adults.dat[which.sfract,])
+
+sfract.by.haul <- sfract.by.haul[match(names(females.by.haul), 
+                                       unique(adults.dat$Haul[aleatory]))]
+
+names(sfract.by.haul) <- names(females.by.haul)
+
+Sh <- data.frame(names(sfract.by.haul), round(sfract.by.haul,3))
+rownames(Sh) <- NULL
+names(Sh) <- c("Haul", "Sh")
+data.SH <- merge(Datah2, Sh, by="Haul",all=TRUE)
+data.SH$Sh <- ifelse (data.SH$TotNh < min.totnumb, NA, data.SH$Sh)
+
+data.SH%>%relocate(Period, .before = Haul) %>%
+  arrange(Period)%>%
+        kbl(caption = "Parameters by haul.") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")
+
+```
+
+
+# Population parameters by Period {.tabset .tabset-tabs}
+
+```{r echo=T, message=FALSE, warning=FALSE}
+# W:  Mean weight of mature females
+# R:  Sex-ratio
+# F:  Batch fecundity = average number of egg by mature female by spawning event (g)
+# S:  Spawning fraction 
+```
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# Minimum samples
+min.totnumb <- 20
+totnumb.by.haul.c <- totnumb.by.haul
+totnumb.by.haul.c[totnumb.by.haul < min.totnumb] <- NA
+
+# Function to estimate variance following the methodology from Picquelle and Stauffer (1985):
+var.DEPM <- function(data,wt)
+  {
+  DATpop <- wt.mean(data, wt)
+  n <- length(data)
+  return(sum(wt^2*(data - DATpop)^2, na.rm=T) / (sum(wt/n,na.rm=T)^2*n*(n-1)))
+  }
+```
+
+## Mean Weight
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+Wmean <-data.SH%>%filter(!is.na(Wh))%>%
+            summarise(mean = wt.mean(Wh,n.Females.R),
+                      var = var.DEPM(Wh,n.Females.R), 
+                    cv = sqrt(var/mean))
+
+WmeanP <-data.SH%>%filter(!is.na(Wh))%>%
+            group_by(Period)%>%
+            summarise(mean = wt.mean(Wh,n.Females.R),
+                      var = var.DEPM(Wh,n.Females.R), 
+                    cv = sqrt(var/mean))
+Wmean
+WmeanP
+```                  
+
+## Mean Sex Ratio                 
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+Rmean <-data.SH%>%filter(!is.na(Rh))%>%
+            summarise(mean = wt.mean(Rh,TotNh),
+                      var = var.DEPM(Rh,TotNh), 
+                      cv = sqrt(var/mean))
+
+RmeanP <-data.SH%>%filter(!is.na(Rh))%>%
+          group_by(Period)%>%
+            summarise(mean = wt.mean(Rh,TotNh),
+                      var = var.DEPM(Rh,TotNh), 
+                      cv = sqrt(var/mean))
+Rmean
+RmeanP
+```
+
+## Mean Batch Fecundity
+    
+```{r echo=F, message=FALSE, warning=FALSE}
+
+Fmean <-data.SH%>%filter(!is.na(Fh))%>%
+            summarise(mean = wt.mean(Fh,n.Females.R),
+                      var = var.DEPM(Fh,n.Females.R), 
+                    cv = sqrt(var/mean))
+
+FmeanP <-data.SH%>%filter(!is.na(Fh))%>%
+            group_by(Period)%>%
+            summarise(mean = wt.mean(Fh,n.Females.R),
+                      var = var.DEPM(Fh,n.Females.R), 
+                    cv = sqrt(var/mean))
+Fmean
+FmeanP
+
+```
+
+## Mean Spawning fraction
+ 
+```{r echo=F, message=FALSE, warning=FALSE}
+Smean <-data.SH%>%filter(!is.na(Sh))%>%
+            summarise(mean = wt.mean(Sh,n.Females.R),
+                      var = var.DEPM(Sh,n.Females.R), 
+                      cv = sqrt(var/mean))
+
+SmeanP <-data.SH%>%filter(!is.na(Sh))%>%
+          group_by(Period)%>%
+            summarise(mean = wt.mean(Sh,n.Females.R),
+                      var = var.DEPM(Sh,n.Females.R), 
+                      cv = sqrt(var/mean))
+
+Smean 
+SmeanP 
+```
+
+# Summary mean parameters
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+options(scipen=999)
+
+bind_rows (Wmean, Rmean, Smean, Fmean)%>%
+  mutate(Parameter=c("Female Mean weight ", "Mean Sex Ratio", "Mean Spawning Fraction", "Mean batch fecundity"))%>%
+  relocate(Parameter, .before = mean)%>%
+  add_row(Parameter = "Mean batch fecundity/g Female (Frel)", 
+          mean = 9374.3285417/355.9464902 , var = NA, cv = NA)%>%
+  add_row(Parameter = "Daily n.eggs/g Female", 
+          mean = 9374.3285417/355.9464902 * 0.5096771* 0.1504741 , var = NA, cv = NA)%>%
+  mutate(across(2:4, round, 3))%>%# 29 days
+  kbl(caption = "Adult parameters estimates for the 2022 Western Atlantic mackerel DEPM survey.") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")
+```
+
+
+
+# Summary SSB
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# ssb <- adults.dat <- read.csv("dat/HOM_PortalSSB.csv")
+# names(ssb) <- c("Period", "Daily fecundity", "Total daily egg production(e+12)", "SSB(kt)")
+
+#ssb%>%kbl(caption = "SSB by period based on aduts parameters by period and combined.") %>%
+            # kable_classic(#full_width = F, 
+            # html_font = "Cambria")
+
+```
+
+
+```{r echo=T}
+# @ https://github.com/GersomCostas/mackerel_adults_MEGS
+# @ https://github.com/ices-eg/wg_WGMEGS 
+```
