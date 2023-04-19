@@ -1,0 +1,11 @@
+Parameter,Y1998,Y2001,Y2004,Y2007,Y2010,Y2013,Y2016,Y2019
+Fecundity samples (n),96,187,205,176,74,132,97,62
+Prevalence of atresia (n),112,290,348,416,511,735,713,252
+Intensity of atresia (n),112,290,348,416,511,56,66,64
+Relative potential fecundity (n/g),1206,1097,1127,1098,1140,1257,1159,1191
+Prevalence of atresia,0.55,0.2,0.28,0.38,0.33,0.22,0.3,0.28
+Geometric mean intensity of atresia (n/g),46,40,33,30,26,27,30,19
+Potential fecundity lost per day (n/g),3.37,1.07,1.25,1.48,1.16,0.8,1.2,0.71
+Potential fecundity lost (n/g),202,64,75,89,70,48,72,43
+Relative potential fecundity lost (%),17,6,7,9,6,4,6,4
+Realised fecundity (n/g),1002,1033,1052,1009,1070,1209,1087,1147
