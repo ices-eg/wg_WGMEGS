@@ -1,0 +1,1152 @@
+---
+title: "WGMEGS 2022 - AEPM: Fecundity and atresia analysis for Atlantic mackerel"
+author: "mkorta&gcosta"
+date: "29/03/2023"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    theme: flatly
+    code_folding: hide
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=12, fig.height=8)
+```
+
+# Summary {-}
+
+- The realised fecunity for 2022 is 1268 n.g.
+- Variances must be calculatd.
+
+
+```{r echo=F, message=FALSE, warning=FALSE}
+# ------------- #
+#  Libraries    #
+# ------------- #
+
+library(ggplot2)
+library(lubridate)
+library(plyr)
+library(tidyverse)
+library(janitor)
+library(dplyr)
+library(FSA)
+library(kableExtra)
+library(psych) # geometric_mean
+library(sf)
+library(rworldmap)
+library(rworldxtra)
+library(ggpubr)
+theme_set(theme_bw(base_size=24))
+```
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# ------------- #
+#     Data      #
+# ------------- #
+
+#bio
+
+bio <- read.csv("dat22/MAC_Portalbio_corrected.csv", header = T)
+
+# Screening 
+scre <- read.csv("dat22/MAC_PortalScreeningHistology.csv", header = T)
+scre <- scre%>%mutate(Fulton_k = 100*FishWeight/(FishLength^3),
+                      GSI = 100*OvaryWeight/FishWeight,
+                      letter = substr(scre$Sample_ref, 1,1))
+scre$SurveyPeriod <- factor(scre$SurveyPeriod , levels = c("2", "3", "4", "5", "6", "7"))
+scre_bio <- scre%>%filter(!is.na(Oocyte_stage_H))
+
+# Fecundity
+dat <- read.csv("dat22/MAC_PortalCounts.csv", header=T)
+dat <- dat%>%rename(letter = Sample_letter)
+
+
+
+# Atresia
+atr <- read.csv("dat22/MAC_PortalAtresia.csv", header=T)
+
+#Summary assessment
+sumtable <- read.csv("dat22/summary_assessment.csv", header=T)
+
+```
+
+# Fishing effort
+
+* Overview of the fishing effort along the time series. Table with Numbers and map.
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+```
+
+# Biological sampling
+
+* Overview of the samling effort along the time series. Table with Numbers and map.
+* plot Length or weight distribution?
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+```
+
+# AEPM Reproductive parameters sampling
+
+## Samples (ovaries) {.tabset .tabset-tabs}
+
+### Collected 
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+scre_t <- scre%>%
+            group_by(letter)%>%
+            summarise(Screened = n())
+            # pivot_wider(names_from = SurveyPeriod, values_from = count)%>%
+            # replace(is.na(.), 0) %>%
+            # mutate(Screened = sum(c_across(where(is.numeric))))
+
+bio_m <- bio%>%
+          filter(Field.Name.!="DTU")%>%
+          group_by(Field.Name.)%>%
+          summarise(Measured= n())
+          #adorn_totals("row")
+
+
+bio_t <- bio%>%select(Field.Name.,letter, Period)%>%
+          filter(letter!="" & letter != "R" & Field.Name. != "DTU")%>%
+          group_by(Field.Name., letter, Period)%>%
+          summarise(count= n())%>%
+          pivot_wider(names_from = Period, values_from = count)%>%
+          replace(is.na(.), 0) %>%
+          mutate(Retained = sum(c_across(where(is.numeric))))
+
+bio_sum <- bio_m %>% inner_join(bio_t, by = "Field.Name.")
+
+
+scre_sum <- bio_sum %>% inner_join(scre_t, by = "letter")%>%
+            rename( "P2" = "2", "P3" = "3","P4" = "4","P5" = "5","P6" = "6","P7" = "7")%>%
+            adorn_totals("row")%>%
+            relocate(P2, .before = P3)%>%
+            relocate(P5, .before = P6)
+           
+
+
+scre_sum%>% kbl(caption = "Relation of retained samples by lab and period and screened ones.") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")
+```
+
+- The objective was to collect 4080 ovaries (4080 AEPM and 3460 DEPM) and in total, 
+  1999 samples were collected, i.e., 1999 AEPM and 1454 DEPM (P3-4-5). 
+- The objetive was achieved in a 49%.
+- 1717 of 1919 were screeened due to diferent reasons.
+- Doubt: not sure E001-E030 should be here????
+
+
+**Geographical distribution**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+world <- getMap(resolution = "high")
+world <- st_as_sf(world)
+ggplot(data = world, frame = year) +
+  geom_sf(color = "black", fill = "lightgrey") +
+  coord_sf(xlim = c(-20,12), ylim = c(35,64), expand = T, crs="+proj=longlat   +ellps=WGS84 +datum=WGS84") +
+  geom_point(data = scre%>%
+                group_by(StartLatitude)%>%
+                mutate(number=n()), 
+                aes(x=StartLongitude , y= StartLatitude, size=sqrt(number)*100, fill=SurveyPeriod),
+                #aes(x=StartLongitude , y= StartLatitude, size=sqrt(number)*100), fill="darkblue",
+                shape = 21, alpha=.9)+
+  scale_size_area(limits=c(0,500), labels = c("1", "5", "10", "25"),breaks = c( 100,224, 320,500))+
+  theme_bw()+
+  labs(size="sample size", title="Screened samples")+
+  theme( legend.position = "right",
+         legend.text = element_text(size = 12, colour = "black"),
+         legend.title = element_text(face = "bold")
+         #legend.box.background = element_rect(color="black", size=1)
+         )
+
+```
+
+### Screened  
+
+**N Screening samples for fecundity**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+scre_aux<- scre%>%select(letter, SurveyPeriod, Fecundity_H)%>%
+                filter(Fecundity_H == "yes")%>%
+                group_by(letter, SurveyPeriod)%>%
+                summarise (Scre_Fec_H_Yes = n())%>%
+             pivot_wider(names_from = SurveyPeriod, values_from = Scre_Fec_H_Yes)%>%
+             replace(is.na(.), 0) %>%
+             mutate(Scre_Fec_H_Yes = sum(c_across(where(is.numeric))))
+                #adorn_totals("row")
+
+fec_t <- dat%>%
+          select(letter, Fecundity_H, Fecundity_W) %>%
+          group_by(letter)%>%
+          filter(Fecundity_H == "yes")%>%
+          summarise(Fec_H_Yes =  n ())%>%
+          #adorn_totals("row")%>%
+        inner_join (dat%>%
+          select(letter, Fecundity_H, Fecundity_W) %>%
+          group_by(letter)%>%
+          filter(Fecundity_W == "yes")%>%
+          summarise(Fec_W_Yes =  n ())%>%
+          replace(is.na(.), 0) 
+          #%>%adorn_totals("row")
+          , by = "letter")%>%
+          replace(is.na(.), 0) 
+    
+
+fec_sum <- bio_sum %>% inner_join(scre_t, by = "letter") %>% 
+            select(Field.Name., Measured, letter, Retained, Screened) %>% 
+            inner_join(scre_aux, by = "letter")%>%
+            relocate(Scre_Fec_H_Yes, .after = Screened)%>%
+            rename( "P2" = "2", "P3" = "3","P4" = "4","P5" = "5","P6" = "6")%>%
+            relocate(P2, .before = P3)
+
+fec_sum%>%
+            full_join (fec_t, by = "letter")%>%
+            replace(is.na(.), 0) 
+            #adorn_totals("row")
+
+
+fec_sum%>%kbl(caption = "Relation of retained samples by lab and period, 
+                            screened ones and fecundity valid samples.") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")
+
+```
+
+-For AEPM, there are 411 valid samples for fecundity analysis.
+
+
+**Geographical distribution of fec samples**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+world <- getMap(resolution = "high")
+world <- st_as_sf(world)
+ggplot(data = world, frame = year) +
+  geom_sf(color = "black", fill = "lightgrey") +
+  coord_sf(xlim = c(-20,12), ylim = c(35,64), expand = T, crs="+proj=longlat   +ellps=WGS84 +datum=WGS84") +
+  geom_point(data = dat%>%filter(Fecundity_H == "yes" & Fecundity_W == "yes")%>%
+                group_by(StartLatitude)%>%
+                mutate(number=n()), 
+                aes(x=StartLongitude , y= StartLatitude, 
+                    size=sqrt(number)*100, fill=as.factor(SurveyPeriod)),
+                #aes(x=StartLongitude , y= StartLatitude, size=sqrt(number)*100), fill="darkblue",
+                shape = 21, alpha=.9)+
+  scale_size_area(limits=c(0,500), labels = c("1", "5", "10", "25"),breaks = c( 100,224, 320,500))+
+  theme_bw()+
+  labs(size="sample size", title="Screened samples")+
+  theme( legend.position = "right",
+         legend.text = element_text(size = 12, colour = "black"),
+         legend.title = element_text(face = "bold")
+         #legend.box.background = element_rect(color="black", size=1)
+         )
+
+```
+
+
+
+**N analysed samples for Prevalence of atresia**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# spawning_H == Atresia_H eta Spawn_atretic_H == Embedding__H
+
+scre%>%group_by(SurveyPeriod, Spawning_H)%>%
+                summarise (count = n())%>%
+                pivot_wider(names_from = Spawning_H, values_from = count)%>%
+                adorn_totals("row")%>%
+                rename(Spawn_H_no = no, Spawn_H_yes = yes)%>%
+                inner_join(
+scre%>%group_by(SurveyPeriod)%>% filter (Spawn_atretic_H == "yes")%>%
+                summarise (count = n())%>%
+                adorn_totals("row")%>%
+                rename (Spawn_atr_yes = count), 
+                by = "SurveyPeriod")%>%
+              kbl(caption = "Relation of samples for prevalence of atresia.") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")
+
+
+scre%>%group_by(Institute_H, Spawning_H)%>%
+                summarise (count = n())%>%
+                pivot_wider(names_from = Spawning_H, values_from = count)%>%
+                adorn_totals("row")%>%
+                rename(Spawn_H_no = no, Spawn_H_yes = yes)%>%
+                inner_join(
+scre%>%group_by(Institute_H)%>% filter (Spawn_atretic_H == "yes")%>%
+                summarise (count = n())%>%
+                adorn_totals("row")%>%
+                rename (Spawn_atr_yes = count), 
+                by = "Institute_H")%>%
+                mutate (Prevalence = Spawn_atr_yes/Spawn_H_yes)%>%
+                select(Institute_H, Spawn_H_yes, Spawn_atr_yes, Prevalence)%>%
+              kbl(caption = "Relation of samples for prevalence of atresia by Institute.") %>%
+            kable_classic(full_width = F, 
+            html_font = "Cambria")
+
+pa_n <- 243
+
+```
+
+**N analysed samples atresia (intensity)**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+atr_t<- scre%>%filter(Spawn_atretic_H == "yes")%>%
+                group_by(SurveyPeriod)%>%
+                summarise (Scre_atr_H_Yes = n())%>%
+                adorn_totals("row")%>%
+                full_join(atr%>%
+                  group_by(SurveyPeriod)%>%
+                  summarise (atr_analysed = n())%>%
+                  adorn_totals("row"), by = "SurveyPeriod")%>%
+                replace(is.na(.), 0)
+
+atr_t%>%
+  kbl() %>%
+  kable_classic(full_width = F, 
+  html_font = "Cambria")
+
+ia_n <- 74
+  
+```
+-For AEPM, there are 243 valid samples for atretic intensity analysis, 74 of which were selected by USRS.
+
+**Geographical distribution of atretic intensity **
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+world <- getMap(resolution = "high")
+world <- st_as_sf(world)
+ggplot(data = world, frame = year) +
+  geom_sf(color = "black", fill = "lightgrey") +
+  coord_sf(xlim = c(-20,12), ylim = c(35,64), expand = T, crs="+proj=longlat   +ellps=WGS84 +datum=WGS84") +
+  geom_point(data = atr%>%
+                group_by(StartLatitude)%>%
+                mutate(number=n()), 
+                aes(x=StartLongitude , y= StartLatitude, 
+                    size=sqrt(number)*100, fill=as.factor(SurveyPeriod)),
+                #aes(x=StartLongitude , y= StartLatitude, size=sqrt(number)*100), fill="darkblue",
+                shape = 21, alpha=.9)+
+  scale_size_area(limits=c(0,500), labels = c("1", "5", "10", "25"),breaks = c( 100,224, 320,500))+
+  theme_bw()+
+  labs(size="sample size", title="Screened samples")+
+  theme( legend.position = "right",
+         legend.text = element_text(size = 12, colour = "black"),
+         legend.title = element_text(face = "bold")
+         #legend.box.background = element_rect(color="black", size=1)
+         )
+  
+```
+### Structure
+
+**Length and weight distribution of retained samples** 
+
+```{r echo=T, message=FALSE, warning=FALSE}
+
+ggplot(scre_bio[!is.na(scre_bio$FishLength),], aes(x=FishLength)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  xlab("Fish Length (cm)")
+
+#by period
+ggplot(scre_bio[!is.na(scre$FishLength),], aes(x=FishLength, group=SurveyPeriod)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  facet_wrap(~SurveyPeriod)+
+  xlab("Fish Length (cm)")
+
+#by Source
+ggplot(scre_bio[!is.na(scre$FishLength),], aes(x=FishLength, group=letter, color=letter)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, position = "identity")+
+  #geom_histogram(fill="white", alpha=0.5, position="identity")+
+  geom_density(lwd=1)+
+  #facet_wrap(~letter)+
+  xlab("Fish Length (cm)")
+
+ggplot(scre_bio[!is.na(scre_bio$FishWeight),], aes(x=FishWeight)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  xlab("Fish Weight (g)")+
+  scale_y_continuous(limits=c(0,0.006))
+
+#by Source
+ggplot(scre_bio[!is.na(scre_bio$FishWeight),], aes(x=FishWeight, group=letter, color = letter)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, position = "identity")+
+  geom_density(lwd=1)+
+  xlab("Fish Weight (g)")
+
+  #facet_wrap(~letter)
+  
+ggplot(scre_bio[!is.na(scre_bio$OvaryWeight),], aes(x=OvaryWeight)) +
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  xlab("ovary weight (g)")
+
+
+
+
+```
+
+**Oocyte stage**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(scre_bio, aes(as.factor(SurveyPeriod), fill=as.factor(Oocyte_stage_H)))+
+  geom_bar()+
+  ylab("Number of observations")+
+  labs(fill="Oocyte Stage")+
+  xlab("Period")
+
+scre_bio %>%  group_by(Oocyte_stage_H) %>% 
+  tally() %>% mutate(percent = n/sum(n))%>% 
+      kbl() %>%
+            kable_classic(full_width = F, 
+            html_font = "Cambria")
+
+```
+
+**POF**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# ggplot(scre_bio, aes(as.factor(SurveyPeriod),fill = as.factor(POF_H)))+
+#   geom_bar(position = "dodge")+
+#   ylab("Number of observations")+
+#   labs(fill="Presence of POF")+
+#   xlab("Period")
+
+scre_bio %>% group_by(SurveyPeriod,POF_H)%>%
+                        count(POF_H) %>% 
+                        mutate(perc = n / nrow(scre_bio)) -> tips2
+
+ggplot(tips2, aes(x = as.factor(SurveyPeriod), y = perc, fill = as.factor(POF_H))) + 
+  geom_bar(stat = "identity", position = "dodge")+
+    ylab("Relative frequencies")+
+  labs(fill="Presence of POF")+
+  xlab("Period")
+
+scre_bio %>%  group_by(POF_H) %>% tally() %>% mutate(percent = n/sum(n))%>%
+  kbl()%>%
+     kable_classic(full_width = F, 
+     html_font = "Cambria")
+
+#scre_bio %>%  group_by(POF_H, SurveyPeriod) %>% tally() %>% mutate(percent = n/sum(n))
+#table(scre_bio$POF_H, scre_bio$SurveyPeriod)
+```
+
+
+**Maturity**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(scre_bio[!is.na(scre_bio$Maturity.Walsh),], aes(as.factor(SurveyPeriod), fill=as.factor(Maturity.Walsh)))+
+  geom_bar()+
+  ylab("Number of observations")+
+  labs(fill="Walsh Scale")+
+  xlab("Period")
+
+```
+
+**FULTON'S K**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(scre_bio, aes(x=Fulton_k)) +
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  scale_x_continuous(breaks=seq(0.5, 2.1, 0.2))+
+  geom_vline (xintercept = 0.5, col = 2, lty = 2, size = 1)+
+  geom_vline (xintercept = 1.2, col = 2, lty = 2, size = 1)
+
+```
+
+
+**GSI**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(scre_bio%>%filter (!is.na(OvaryWeight)), aes(x=GSI)) + # C197,C198,C236,I068 have no Ovaryweight
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  xlab ("GSI (%)")+
+  geom_vline (xintercept = 1, col = 2, lty = 2, size = 1)+
+  geom_vline (xintercept = 25, col = 2, lty = 2, size = 1)
+
+```
+
+
+## Fecundity {.tabset .tabset-tabs}
+
+### Numbers
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+dat_F <- dat%>%filter(Fecundity_W == "yes", Fecundity_H == "yes")     # 398 observations
+dat_F <- dat_F%>%filter(FultonK >= 0.5 & FultonK <= 1.2)              # 398 observations
+dat_F <- dat_F%>%filter(p95_dia >= 400)                               # 396 observations
+dat_F <- dat_F%>%filter(GSI >= 1 & GSI <= 25)                         # 396 observations
+
+fec_n <- 396
+
+ggplot(dat_F, aes(SurveyPeriod, fill=as.factor(SurveyPeriod)))+
+  geom_bar()+
+  ylab("Number of observations")+
+  labs(fill="Period")+
+  scale_x_continuous(breaks = 2:7)
+
+dat_F%>%group_by(Country, letter)%>%
+            count()%>%  
+            adorn_totals("row")%>%
+            kbl() %>%
+            kable_classic(full_width = F, 
+            html_font = "Cambria")
+
+```
+- 396 observation available for fecundity analysis.
+- Most of the samples belong to period 3.
+
+
+### Structure
+
+**Length distribution** 
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=FishLength)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  xlab ("Length (cm)")+
+  scale_x_continuous(breaks=seq(25,45,5), limits=c(25, 45))
+
+ggplot(dat_F, aes(y = FishLength, x = as.factor(Fecundity_by), color = as.factor(Fecundity_by))) + 
+  geom_boxplot()+
+  geom_jitter(position=position_jitter(0.1))+
+  xlab("Institute") + 
+  ylab("Length (cm)")+
+  theme(legend.position="none")
+
+# By source
+ggplot(dat_F, aes(y = FishLength, x = letter, fill = letter)) + 
+  geom_violin(trim=FALSE)+
+  geom_boxplot(width=0.1, fill="white")+
+  #geom_jitter(position=position_jitter(0.1))+
+  xlab("Source") + 
+  ylab("Length (cm)")+
+  theme(legend.position="none")
+  
+```
+- Low differences in mean fish length among institutes.
+
+**Weight distribution** 
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=FishWeight)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  xlab("Weight (g)")+
+    scale_x_continuous(breaks=seq(100,700,100), limits=c(100, 700))
+  
+
+ggplot(dat_F, aes(y = FishWeight, x = as.factor(Fecundity_by), color = as.factor(Fecundity_by))) + 
+  geom_boxplot()+
+  geom_jitter(position=position_jitter(0.1))+
+  xlab("Institute") + 
+  ylab("Weight (g)")+
+  theme(legend.position="none")
+
+# By source
+ggplot(dat_F, aes(y = FishWeight, x = letter, fill = letter)) + 
+  geom_violin(trim=FALSE)+
+  geom_boxplot(width=0.1, fill="white")+
+  #geom_jitter(position=position_jitter(0.1))+
+  xlab("Source") + 
+  ylab("weight (g)")+
+  theme(legend.position="none")
+```
+- Low differences in mean fish weight among periods.
+
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+mean(dat_F$FishLength)
+
+dat_F%>%select(SurveyPeriod, FishLength, FishWeight)%>%
+    group_by(SurveyPeriod)%>%
+    summarise(count=n(),
+              meanL = round(mean(FishLength), digits = 2),
+              meanW = round(mean (FishWeight), digits = 2))%>%
+             add_row(SurveyPeriod = NA , count = 396, 
+                     meanL = round(mean(dat_F$FishLength), digits = 2), 
+                     meanW=  round(mean(dat_F$FishWeight), digits = 2 ))%>%
+            kbl() %>%
+            kable_classic(full_width = F, 
+            html_font = "Cambria")
+
+```
+
+**Ovary Weight distribution** 
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=OvaryWeight)) + 
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  xlab("Ovary weight (g)")
+
+ggplot(dat_F, aes(y = OvaryWeight, x = as.factor(Fecundity_by), color = as.factor(Fecundity_by))) + 
+  geom_boxplot()+
+  geom_jitter(position=position_jitter(0.1))+
+  xlab("Institute") + 
+  ylab("Ovary weight (g)")+
+  theme(legend.position="none")
+```
+- High ovary weight individuals analysed by WMR.X208 and DTU K012.
+
+**FULTON'S K**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=FultonK)) +
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  scale_x_continuous(limits = c(0.5, 1.2), breaks=seq(0.5, 1.2, 0.2))
+  
+
+ggplot(dat_F, aes(y = FultonK, x = as.factor(Fecundity_by), color = as.factor(Fecundity_by))) + 
+  geom_boxplot()+
+  geom_jitter(position=position_jitter(0.1))+
+  xlab("Institute") + 
+  theme(legend.position="none")
+
+```
+
+**GSI**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=GSI)) +
+  geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+  geom_density(lwd=1)+
+  xlab ("GSI (%)")+
+  scale_x_continuous(limits = c(0, 25),breaks=seq(0, 25, 5))
+
+ggplot(dat_F, aes(y = GSI, x = as.factor(Fecundity_by), color = as.factor(Fecundity_by))) + 
+  geom_boxplot()+
+  geom_jitter(position=position_jitter(0.1))+
+  ylab ("GSI (%)")+
+  xlab("Institute") + 
+  theme(legend.position="none")
+```
+
+### Potential Fecundity
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# Formula:: Pot_fec == OO_density * OvaryWeight
+
+ggplot(dat_F, aes(x=FishLength ,y =PotentialFecundity/1000)) +
+    geom_point(aes(colour = as.factor(SurveyPeriod)), size = 3, alpha =0.5)+
+    geom_smooth(method = lm, se = TRUE)+
+    stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1)+
+      ylab("Potential fecundity (n*1000)")+
+      xlab ("Fish length (cm)")+
+      scale_x_continuous(limits = c(25,45))+
+      labs( colour= "Period")+
+      stat_cor(aes(label = ..r.label..), label.x = 30)
+      #annotate(geom="text", x=30, y=700, label="R = 0.65",color="blue", size = 5)
+
+ggplot(dat_F, aes(x=FishWeight ,y =PotentialFecundity/1000)) +
+    geom_point(aes(colour = as.factor(SurveyPeriod)), size = 3, alpha =0.5)+
+    #stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1)+
+    geom_smooth(method = lm, se = TRUE)+
+      ylab("Potential fecundity (n*1000)")+
+      xlab ("Fish weight (g)")+
+      scale_x_continuous(limits = c(100, 600))+
+      labs( colour= "Period")+
+  stat_cor(aes(label = ..r.label..), label.x = 200)
+  #annotate(geom="text", x=200, y=700, label="R = 0.74",color="blue", size = 5)
+
+```
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# By institute
+
+dat_By<- group_by(dat_F, Fecundity_by) %>%
+        summarise(
+        count = n(),
+        mean = round(mean(PotentialFecundity, na.rm = TRUE),2),
+        median = round(median(PotentialFecundity, na.rm = TRUE),2),
+        sd = round(sd(PotentialFecundity, na.rm = TRUE),2),
+        max = round(max(PotentialFecundity, na.rm = TRUE),2),
+        min = round(min(PotentialFecundity, na.rm = TRUE),2),
+        error = round(qt(0.975,df=count-1)*sd/sqrt(count),2),
+        left = round(mean - error,2),
+        right = round(mean + error,2),
+    )
+
+
+dat_By%>%select(Fecundity_by, count, median)%>%
+          kbl(caption = "Relative potencial fecundity by Institute") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")
+
+
+ggplot(dat_By, aes(x=Fecundity_by, y = mean, color = as.factor (Fecundity_by))) +
+  geom_point()+
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean + sd), width=.2, position=position_dodge(0.05))+
+  xlab("Institute") + 
+  ylab ("potential fecundity (n/g)")+
+  theme(legend.position="none")
+```
+
+### Relative potential Fecundity
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# Formula:: Pot_fec == OO_density * OvaryWeight/FIshWeight
+
+dattable <- dat_F%>%
+    summarise(
+        count = n(),
+        mean = round(mean(RelativeFecundity, na.rm = TRUE),2),
+        median = round(median(RelativeFecundity, na.rm = TRUE),2),
+        Trimmean10=round(mean(RelativeFecundity, na.rm=T, trim = 0.10)), 
+        sd = round(sd(RelativeFecundity, na.rm = TRUE),2),
+        max = round(max(RelativeFecundity, na.rm = TRUE),2),
+        min = round(min(RelativeFecundity, na.rm = TRUE),2),
+        error = round(qt(0.975,df=count-1)*sd/sqrt(count),2),
+        left = round(mean - error,2),
+        right = round(mean + error,2)
+    )%>%
+  # mutate(se = round(sd/ sqrt(count),2),
+  #        low.ci = round(median - qt(1 - (0.05 / 1.96), count - 1) * se, 2),
+  #        up.ci = round(median + qt(1 - (0.05 / 1.96), count - 1) * se, 2))
+kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)%>%
+  add_header_above(c(  "Relative potential fecundity" = 10))
+
+dattable
+
+Rel_fec <- 1313
+```
+
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=RelativeFecundity)) +
+    geom_histogram(aes(y=..density..), bins = 30, col="black", alpha=0.3, fill="grey")+
+    geom_density(lwd=1)+
+    geom_vline(xintercept=1191, linetype="dashed", color = "red")+
+    xlab ("Relative potential fecundity (n/g)")+
+   scale_y_continuous(limits = c(0,0.002))
+
+```
+- The median is 1313 ovo/g.
+
+**Re_fec by institute** 
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# By institute
+
+dat_By<- group_by(dat_F, Fecundity_by) %>%
+        summarise(
+        count = n(),
+        mean = round(mean(RelativeFecundity, na.rm = TRUE),2),
+        median = round(median(RelativeFecundity, na.rm = TRUE),2),
+        sd = round(sd(RelativeFecundity, na.rm = TRUE),2),
+        max = round(max(RelativeFecundity, na.rm = TRUE),2),
+        min = round(min(RelativeFecundity, na.rm = TRUE),2),
+        error = round(qt(0.975,df=count-1)*sd/sqrt(count),2),
+        left = round(mean - error,2),
+        right = round(mean + error,2),
+    )
+
+
+dat_By%>%select(Fecundity_by, count, median)%>%
+          kbl(caption = "Relative potencial fecundity by Institute") %>%
+            kable_classic(full_width = F, 
+            html_font = "Cambria")
+
+
+ggplot(dat_By, aes(x=Fecundity_by, y = mean, color = as.factor (Fecundity_by))) +
+  geom_point()+
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean + sd), width=.2, position=position_dodge(0.05))+
+  xlab("Institute") + 
+  ylab ("Realtive potential fecundity (n/g)")+
+  theme(legend.position="none")
+```
+- Slightly lower MI.
+
+**Re_fec by source** 
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# By source
+
+dat_By<- group_by(dat_F, letter) %>%
+        summarise(
+        count = n(),
+        mean = round(mean(RelativeFecundity, na.rm = TRUE),2),
+        median = round(median(RelativeFecundity, na.rm = TRUE),2),
+        sd = round(sd(RelativeFecundity, na.rm = TRUE),2),
+        max = round(max(RelativeFecundity, na.rm = TRUE),2),
+        min = round(min(RelativeFecundity, na.rm = TRUE),2),
+        error = round(qt(0.975,df=count-1)*sd/sqrt(count),2),
+        left = round(mean - error,2),
+        right = round(mean + error,2),
+    )
+
+
+dat_By%>%select(letter, count, median)%>%
+          kbl(caption = "Relative potencial fecundity by Institute") %>%
+            kable_classic(full_width = F, 
+            html_font = "Cambria")
+
+
+ggplot(dat_By, aes(x=letter, y = mean, color = as.factor (letter))) +
+  geom_point()+
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean + sd), width=.2, position=position_dodge(0.05))+
+  xlab("Source") + 
+  ylab ("Realtive potential fecundity (n/g)")+
+  theme(legend.position="none")
+```
+
+**Re_fec without commercial fishery** 
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+dat_wfish <- dat_F%>%filter (letter!="X")%>%
+    summarise(
+        count = n(),
+        mean = round(mean(RelativeFecundity, na.rm = TRUE),2),
+        median = round(median(RelativeFecundity, na.rm = TRUE),2),
+        Trimmean10=round(mean(RelativeFecundity, na.rm=T, trim = 0.10)), 
+        sd = round(sd(RelativeFecundity, na.rm = TRUE),2),
+        max = round(max(RelativeFecundity, na.rm = TRUE),2),
+        min = round(min(RelativeFecundity, na.rm = TRUE),2),
+        error = round(qt(0.975,df=count-1)*sd/sqrt(count),2),
+        left = round(mean - error,2),
+        right = round(mean + error,2)
+    )%>%
+  # mutate(se = round(sd/ sqrt(count),2),
+  #        low.ci = round(median - qt(1 - (0.05 / 1.96), count - 1) * se, 2),
+  #        up.ci = round(median + qt(1 - (0.05 / 1.96), count - 1) * se, 2))
+kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)%>%
+  add_header_above(c(  "Relative potential fecundity" = 10))
+
+dat_wfish
+
+Rel_fec_wfish <- 1198
+
+```
+
+**Relative fecundity by lenght and weight**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=FishLength ,y =RelativeFecundity)) +
+    geom_point(aes(colour = as.factor(SurveyPeriod)), size = 3, alpha =0.5)+
+    #stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1)+
+    geom_smooth(method = lm, se = TRUE)+
+      ylab("Relative potential fecundity (n/g)")+
+      xlab ("Fish length (cm)")+
+      scale_x_continuous(limits = c(25,45))+
+      labs( colour= "Period")+
+   stat_cor(aes(label = ..r.label..), label.x = 30)
+    #annotate(geom="text", x=40, y=2000, label="R = -0.18",color="blue", size = 5)
+
+ggplot(dat_F, aes(x=FishWeight ,y =RelativeFecundity)) +
+    geom_point(aes(colour = as.factor(SurveyPeriod)), size = 3, alpha =0.5)+
+    #stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1)+
+    geom_smooth(method = lm, se = TRUE)+
+      ylab("Relative potential fecundity (n/g)")+
+      xlab ("Fish weight (g)")+
+      scale_x_continuous(limits = c(100, 600))+
+      labs( colour= "Period")+
+    stat_cor(aes(label = ..r.label..), label.x = 200)
+   #annotate(geom="text", x=500, y=2000, label="R = -0.12",color="blue", size = 5)
+```
+
+**Relative fecundity variance**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+model <- lm(RelativeFecundity ~ 1, dat= dat_F)
+summary(model)
+
+var = (summary(model)[6]$sigma)^2 # SD es el 6 item
+
+# dat_F%>%select(RelativeFecundity)%>%
+#         mutate(mean = round(mean(RelativeFecundity, na.rm = TRUE),2),
+#                var = round((RelativeFecundity-mean)^2,2),
+#                Sum = round(sum(var), 2), 
+#                variance = unique(Sum)/(dim(dat_F)[1]-1))
+# sqrt(128725.5)
+
+```
+
+**Relative fecundity latitudinally**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=StartLatitude ,y =RelativeFecundity)) +
+    geom_point(aes(colour = as.factor(SurveyPeriod)), size =5, alpha= 0.5)+
+      ylab("Relative potencial fecundity (n/g)")+
+      xlab ("Latitude North")+
+      scale_y_continuous(limits = c(0, 2500))+
+      labs( colour= "Period")
+```
+
+**Relative fecundity calendar Day**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=CalendarDay ,y =RelativeFecundity)) +
+    geom_point(aes(colour = as.factor(SurveyPeriod)), size =5, alpha= 0.5)+
+      ylab("Relative potencial fecundity (n/g)")+
+      xlab ("Calendar Day")+
+      scale_y_continuous(limits = c(0, 2500))+
+      labs( colour= "Period")
+```
+
+**Relative leading cohort diameter**
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+ggplot(dat_F, aes(x=p95_dia, y = RelativeFecundity)) +
+    geom_point(aes(colour = as.factor(SurveyPeriod)), size =5, alpha= 0.5)+
+      ylab("Relative potential fecundity (n/g)")+
+      #xlab ("Leading cohort diameter (micron)")+
+      xlab(expression("Leading cohort diameter"~"("*mu*m*")"))+
+      scale_y_continuous(limits = c(0, 2500))+
+      labs( colour= "Period")
+```
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# # overall median (RelativeFecundity) == 1187 
+# 
+# dat_F$test <- ifelse (dat_F$RelativeFecundity > Rel_fec, "yes", "no")
+# dat_test <- as.data.frame(table(dat_F$test, dat_F$Fecundity_by))
+# dat_test_wide <- reshape(dat_test, idvar = "Var1", timevar = "Var2", direction = "wide")
+# names(dat_test_wide) <- c ("GreaterMedian","AZTI","DTU","IEO","IMR","MI","MSS","WMR")
+# 
+# dat_test_wide2<- rbind(dat_test_wide, data.frame(GreaterMedian = "Total", 
+#                                                 AZTI = sum(dat_test_wide$AZTI),
+#                                                 DTU = sum(dat_test_wide$DTU),
+#                                                 IEO = sum(dat_test_wide$IEO),
+#                                                 IMR = sum(dat_test_wide$IMR),
+#                                                 MI = sum(dat_test_wide$MI), 
+#                                                 MSS = sum(dat_test_wide$MSS), 
+#                                                 WMR = sum(dat_test_wide$WMR)))
+# 
+# #Table
+# kable(dat_test_wide2) %>%
+#   kable_styling(bootstrap_options = "striped", full_width = F)%>%
+#   add_header_above(c(  "", "Median test" = 7))
+# 
+# # Chi-squared Test of Independence
+# # Test the hypothesis whether  to be greater than the median is independent of the institute at .05 significance level.
+# # Contingency table
+# 
+# tbl <- table(dat_F$test, dat_F$Fecundity_by)
+# 
+# chisq.test(tbl) 
+# 2019
+# As the p-value 0.2746 is greater than the .05 significance level, 
+# we do not reject the null hypothesis that to be greater thatn the median is independent of institute.
+# However sample size is small to proceed with the test.
+#2022
+# As the p-value 2.2-16  is less than the .05 significance level, 
+# we do reject the null hypothesis that to be greater thatn the median is independent of institute.
+
+```
+## Atresia {.tabset .tabset-tabs}
+
+### Prevalence of atresia
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# spawning_H == Atresia_H eta Spawn_atretic_H == Embedding__H
+
+table(scre$Spawning_H) #867
+table(scre$Spawn_atretic_H) # 243
+
+pa = 243/867
+pa
+
+```
+
+### Intensity of atresia
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+atr$NaYV = (atr$YV_P/(atr$Field_area * atr$No_pictures))^(3/2)
+atr$NaYVG = (atr$YV_YG_P/(atr$Field_area * atr$No_pictures))^(3/2)
+atr$NaYG = (atr$YG_P/(atr$Field_area * atr$No_pictures))^(3/2)
+atr$VYV = ((atr$YV/atr$No_grid)^0.5)
+atr$VYVG = ((atr$YV_YG/atr$No_grid)^0.5)
+atr$VYG = ((atr$YG/atr$No_grid)^0.5)
+atr$FYV= ifelse(atr$NaYV | atr$VYV != 0, atr$OvaryWeight * 0.72 * atr$NaYV /atr$VYV, 0)
+atr$FYG = ifelse(atr$NaYVG | atr$VYVG != 0,atr$OvaryWeight * 0.72 * atr$NaYVG /atr$VYVG, 0)
+atr$FYVG = ifelse(atr$NaYG | atr$VYG != 0,atr$OvaryWeight * 0.72 * atr$NaYG /atr$VYG, 0)
+
+# Intensity by stage
+atr$RFYV= atr$FYV/atr$Fish_weight
+atr$RFYVG = atr$FYVG/atr$Fish_weight
+atr$RFYG = atr$FYG/atr$Fish_weight
+
+# Total relative intensity
+atr$RFtot = atr$RFYV + atr$RFYVG + atr$RFYG
+
+ggplot(atr, aes(x = Atresia_by_I, y= RFtot))+
+  geom_boxplot(aes(color = Atresia_by_I))+
+  xlab("Institute")
+
+# For geometric mean when Ratrtot is "0" then it is changed to "0.08 ~ 0.1" being the the lowest value of the series (2019).
+
+atr$RFtot[atr$RFtot == 0] <- 0.1
+
+# to compare atretic intensity values without 0s and with 0.08.
+atr.0 <-atr[atr$RFtot != 0,]
+
+
+atrtable <-atr%>%filter(FultonK>= 0.5 & FultonK <= 1.2 & GSI >= 1 & GSI <= 25)%>%
+  summarise (
+    count = n(),
+    meanRatr = round(mean (RFtot, na.rm = TRUE), digit =2),
+    geomeanRatr = round(geometric.mean(RFtot), digit =2)
+  )
+
+atrtable.0 <-atr.0%>%filter(FultonK>= 0.5 & FultonK <= 1.2 & GSI >= 1 & GSI <= 25)%>%
+  summarise (
+    meanRatr = round(mean (RFtot, na.rm = TRUE), digit =2),
+    geomeanRatr = round(geometric.mean(RFtot), digit =2)
+  )
+
+
+atr%>%filter(FultonK>= 0.5 & FultonK <= 1.2 & GSI >= 1 & GSI <= 25)%>%
+        ggplot(aes(Atresia_by_I, RFtot, col= Atresia_by_I))+
+          geom_boxplot()
+
+
+#Table
+kable(atrtable) %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)%>%
+  add_header_above(c(  "Atresia summary" = 3))
+
+ia_geom <- round(geometric.mean(atr$RFtot), digit =2)
+
+```
+
+### Mean atretic loss
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# Formula :: mean astretic loss (MAL) = 
+# = mean atretic intensity * atretic prevalence * duration spawning / duration early alpha atresia
+
+ds = 60
+deaa = 7.5
+
+MAL = round(ia_geom * pa * ds / deaa, digits= 2)
+
+MAL
+
+loss <- cbind(ia_geom, round(pa, digits=2),ds, deaa, MAL)
+loss <- as.data.frame(loss)
+names(loss) <- c("Intensity(n/g)", "Prevalence", "Duration_Spawn_Season_days", 
+                 "Duration_EarlyA_days", "Loss_by_atresia (n/g)")
+
+loss%>%kbl() %>%
+            kable_classic(full_width = F, 
+            html_font = "Cambria")
+```
+
+## Realised fecundity
+
+```{r echo=T, message=FALSE, warning=FALSE}
+
+# formula:: RF == relative fecundity - mean atretic loss
+
+RF = round(Rel_fec - MAL, digits = 2)
+
+RF
+
+```
+
+### Potential fecundity lost (n/g)
+
+```{r echo=T, message=FALSE, warning=FALSE}
+
+# formula:: PFL == relative fecundity(median) - realised fecundity
+
+PFL = Rel_fec - RF
+
+PFL
+
+```
+
+### Potential fecundity lost per day (n/g)
+
+```{r echo=T, message=FALSE, warning=FALSE}
+
+# formula:: PFL_day == potential decundity loss  divided by duration of the season in days
+
+PFL_day = PFL/ds
+
+PFL_day
+
+```
+
+### Relative potential fecundity lost (%)
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+# formula:: RPFL_per == potential decundity loss  divided by median relative potential fecundity *100
+
+RPFL_per = PFL*100/Rel_fec
+
+RPFL_per
+```
+
+## AEPM results {.tabset .tabset-tabs}
+
+### Parameters summary 
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+sumtable$Y2022 <-   c(fec_n, pa_n, ia_n, Rel_fec, pa, ia_geom, PFL_day , PFL, RPFL_per , RF)
+sumtable[2:9] <- round(sumtable[2:9], digits = 0)
+
+
+sumtable %>%kbl(caption = "Assessment years") %>%
+            kable_classic(#full_width = F, 
+            html_font = "Cambria")
+
+```
+
+### Biomass
+
+* Biomass each year and component?
+* scatterplot
+
+```{r echo=F, message=FALSE, warning=FALSE}
+
+```
+
+
